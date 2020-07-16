@@ -10,7 +10,7 @@
 #include "hf_non_copy.h"
 #include "hf_thread.h"      //CurrentThread::gettid()
 #include "hf_channel.h"
-#include "hf_poller.h"
+#include "hf_epoller.h"
 #include "hf_mutex.h"
 
 namespace hf
@@ -18,7 +18,7 @@ namespace hf
 //继承NonCopy，防止EventLoop拷贝，当时可以使用指针或者引用
 class EventLoop : public NonCopy
 {
-    typedef Poller::ChannelVector ChannelVector;
+    typedef Epoller::ChannelVector ChannelVector;
 
     public:
 
@@ -52,6 +52,13 @@ class EventLoop : public NonCopy
         // 在IO线程(即每一个创建EventLoop对象的线程)中运行函数func，这样有些数据结构就不用加锁，保证安全
         void RunInIOThread(const Functor &func);
 
+        // 添加PendingFuntor，由任何线程调用
+        // TcpServer调用此函数，传过来一个TcpConnectionPtr，用于延长TcpConnection的寿命
+        void AddPendingFuntor(const Functor &func);
+
+        // 移除Poller中监听的fd，主要调用Poller.RemoveChannel
+        void RemoveChannel(Channel* channel);
+
     private:
         //创建该事件循环的线程
         const pid_t kThreadID_;
@@ -60,7 +67,7 @@ class EventLoop : public NonCopy
         // 每次Poller::Poll函数返回时，返回激活的描述负符
         ChannelVector activate_channels_;
 
-        std::unique_ptr<Poller> poller_;
+        std::unique_ptr<Epoller> poller_;
 
         // 是否结束
         bool is_quited_;
@@ -78,8 +85,7 @@ class EventLoop : public NonCopy
 
         // 向eventfd中写一个数据，使其可读，这样poll才能返回，运行pending_functors中的函数
         void WakeUpEventfd();
-        // 添加PendingFuntor，由任何线程调用
-        void AddPendingFuntor(const Functor &func);
+        
         // 处理pending_functors_中的函数
         void DoPengdingFunctors();
 

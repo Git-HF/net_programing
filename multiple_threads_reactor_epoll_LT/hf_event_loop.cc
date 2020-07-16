@@ -31,7 +31,7 @@ namespace hf
 EventLoop::EventLoop()
 : is_looping_(false), 
   kThreadID_(CurrentThread::GetID()),
-  poller_(new Poller()),
+  poller_(new Epoller()),
   is_quited_(false),
   event_fd_(CreateEventfd()),
   pending_functor_channel_(new Channel(this, event_fd_)),
@@ -101,6 +101,13 @@ void EventLoop::Update(Channel* p_channel)
     poller_->UpdateChannels(p_channel);
 }
 
+void EventLoop::RemoveChannel(Channel* channel)
+{
+    AssertInCreaeteThread();
+    assert(channel->GetEventLoop() == this);
+    poller_->RemoveChannel(channel);
+}
+
 // eventfd的可读回调函数，只能由IO线程调用
 void EventLoop::HandlerEventfd()
 {
@@ -139,6 +146,8 @@ void EventLoop::AddPendingFuntor(const Functor &func)
         // 如果不在IO线程中，则肯定需要唤醒
         // 如果在IO线程中，如果此时正在处理pending_functors，则说明在回调函数中又向pending_functors_队列中添加函数
         // 所以需要再次重新唤醒，否则新添加的函数将不能及时的响应
+        // 如果不在处理pending_functors，说明在某个事件的回调函数中调用此函数，那么当初完所有回调函数时，会自动调用
+        // DoPengdingFunctors函数，所以不需要唤醒
         if(!IsInCreateThread() || is_handling_pending_functors)
             WakeUpEventfd();
 }

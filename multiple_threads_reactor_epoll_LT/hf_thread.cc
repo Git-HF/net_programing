@@ -50,6 +50,7 @@ void* StartThreadHelp(void* args)
 Thread::Thread(const ThreadFunc & func)
 : thread_func_(func),
   thread_ID_(0),
+  started_(false),
   join_(false)
 {
 

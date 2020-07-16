@@ -35,6 +35,8 @@ class Thread : public NonCopy
         bool IsStarted() const { return started_; }
 
     private:
+
+        //static void* ProxyThreadFunc(void* args);
         ThreadFunc thread_func_;
         // pthread_self()的返回值
         pthread_t thread_ID_;

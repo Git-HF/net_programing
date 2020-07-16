@@ -24,7 +24,14 @@ class Channel : public NonCopy
     public:
         typedef std::function<void(void)> EventCallBackFunc;
 
+        // 主要用于epoll,用于在更新channel时，是添加新的文件描述符还是修改旧的文件描述符
+        static const int kNewChannel = 0;
+        static const int kOldChannel = 1;
+        static const int kDeletedChannel = 2;
+
         Channel(EventLoop* event_loop, int fd);
+
+        ~Channel();
 
         //参数为常量引用
         void SetReadCallBack(const EventCallBackFunc& read_cb){
@@ -37,6 +44,10 @@ class Channel : public NonCopy
 
         void SetExcpetCallBack(const EventCallBackFunc& except_cb){
             except_call_back_ = except_cb;
+        }
+
+        void SetCloseCallBack(const EventCallBackFunc& close_cb){
+            close_call_back_ = close_cb;
         }
 
         void EnableRead(){
@@ -57,6 +68,10 @@ class Channel : public NonCopy
             events_ |= (~kWriteEvent);
             Update();
         }
+        void DisableAll(){
+            events_ = kNoneEvent;
+            Update();
+        }
 
         //当IO多路复用函数返回时，由其他类对象回调此函数，判断发生的事件
         void HandleEvent();
@@ -64,6 +79,7 @@ class Channel : public NonCopy
         int GetIndex() const { return index_; }
         int GetFD() const { return fd_; }
         int GetEvents() const { return events_; }
+        EventLoop* GetEventLoop() const { return event_loop_; }
 
         // 调用这两个函数都是在IO线程中，所以数据更新不需要加锁
 
@@ -72,9 +88,11 @@ class Channel : public NonCopy
         // poll -> FillActivateChannels -> SetRevents，在IO线程中
         void SetRevents(int revents) { revents_ = revents; }
 
-
         // 判断当前描述符关注的事件为kNoneEvent，也就是不关注任何事件
         bool IsNoneEvent() const { return events_ == kNoneEvent; }
+
+        // 判断当前描述符是否关注了可写事件
+        bool IsWriteEvent() const { return events_ & kWriteEvent; }
 
     private:
         // 当设置可读、可写标志时，需要更新Poller对象中的相应参数
@@ -94,10 +112,24 @@ class Channel : public NonCopy
         // ？？？具体作用不清楚
         // 表示Poller中数组的序号，通过这个序号，在Poller中修改和删除时可以加快速度
         // 该序号初始化为-1，当加入Poller中检测数组时真正修改
+        // 当使用epoll时，用于表示这个是channel是新的channel还是旧的channel。
+        // 如果是新channel，调用update时，是添加文件描述符
+        // 如果是旧channel，调用update时，是修改文件描述符的事件。
         int index_;
 
+        // 用来标识当前对象是否正在处理事件，主要用于关闭连接的标志位。
+        // 防止Channel对象被错误销毁
+        bool eventHanding_;
+
         // 当文件描述符可读，可写，发生异常时的回调函数
-        EventCallBackFunc read_call_back_, write_call_back_, except_call_back_;
+        EventCallBackFunc read_call_back_;
+        EventCallBackFunc write_call_back_;
+        EventCallBackFunc except_call_back_;
+        
+        // 当对端关闭连接时，回调此函数，主要需要销毁TcpConnection对象
+        // ？？？为什么不read == 0的时候回调此函数？？
+        // 两种情况下只是在这一层表现不同，在TcpConnection中都是一样的
+        EventCallBackFunc close_call_back_;
 
         static const int kNoneEvent;
         static const int kReadEvent;

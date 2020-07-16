@@ -11,7 +11,8 @@ namespace hf
     // 输出错误信息的同时退出进程
     inline void ErrorAndQuit(const char* str)
     {
-        printf("%s: %s", str, strerror(errno));
+        printf("%s: %s\n", str, strerror(errno));
+        exit(0);
     }
 
     // 只单纯输出str并退出
@@ -25,6 +26,11 @@ namespace hf
     inline void Output(const char* str)
     {
         printf("%s\n", str);
+    }
+
+    inline void OutputError(const char* str)
+    {
+        printf("%s: %s\n", str, strerror(errno));
     }
 }
 
